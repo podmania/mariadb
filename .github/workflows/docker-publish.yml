@@ -1,4 +1,4 @@
-name: Build <% name %> Distroless
+name: Build mariadb-server Distroless
 
 permissions:
   contents: read
@@ -32,10 +32,10 @@ jobs:
         with:
           use-flakehub: false
           
-      - name: Get current <% name %> version from nixpkgs
+      - name: Get current mariadb-server version from nixpkgs
         id: version
         run: |
-          VERSION=$(nix eval .#<% name %>Version --raw --impure)
+          VERSION=$(nix eval .#mariadb-serverVersion --raw --impure)
           echo "new_version=$VERSION" >> $GITHUB_OUTPUT
       - name: Check if version already exists or force rebuild requested
         id: check
@@ -77,13 +77,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Build OCI image
-        run: nix build .#<% name %>-image --impure
+        run: nix build .#mariadb-server-image --impure
       - name: Load and tag
         run: |
           docker load < result
           VERSION="${{ needs.check-version.outputs.new_version }}"
-          docker tag <% name %>:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-${{ matrix.arch }}
-          docker tag <% name %>:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ matrix.arch }}
+          docker tag mariadb-server:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-${{ matrix.arch }}
+          docker tag mariadb-server:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ matrix.arch }}
       - name: Push
         run: |
           VERSION="${{ needs.check-version.outputs.new_version }}"
