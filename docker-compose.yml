@@ -1,10 +1,10 @@
 services:
-  mariadb-server:
-    image: ghcr.io/podmania/mariadb-server:latest
+  mariadb:
+    image: ghcr.io/podmania/mariadb:latest
     # set to host user id and gid
     # defaults to 1000:1000
     # user: 1001:1001
-    container_name: mariadb-server
+    container_name: mariadb
     ports:
       - 3306:3306
     volumes:   
