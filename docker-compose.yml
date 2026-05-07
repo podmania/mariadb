@@ -1,16 +1,17 @@
 services:
-  <% name %>:
-    image: ghcr.io/podmania/<% name %>:latest
+  mariadb-server:
+    image: ghcr.io/podmania/mariadb-server:latest
     # set to host user id and gid
     # defaults to 1000:1000
     # user: 1001:1001
-    container_name: <% name %>
+    container_name: mariadb-server
     ports:
-      - 1234:1234
+      - 3306:3306
     volumes:   
-      - ./config:/config
-      - ./data:/data
+      - db:/var/lib/mysql
       - /etc/localtime:/etc/localtime:ro # optional: use either TZ variable or localtime mapping, not both
     # environment:
     #   - TZ=America/New_York
     restart: unless-stopped
+volumes:
+  db:
