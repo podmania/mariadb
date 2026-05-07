@@ -1,3 +1,3 @@
-# mariadb-server
+# mariadb
 
 Enhanced, drop-in replacement for MySQL.
