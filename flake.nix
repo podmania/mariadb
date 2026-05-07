@@ -1,5 +1,5 @@
 {
-  description = "mariadb-server distroless image";
+  description = "mariadb distroless image";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -10,11 +10,11 @@
     pkgs = nixpkgs.legacyPackages.${system};
   in {
     packages.${system} = {
-      mariadb-server-image = pkgs.dockerTools.buildLayeredImage {
-        name = "mariadb-server";
+      mariadb-image = pkgs.dockerTools.buildLayeredImage {
+        name = "mariadb";
         tag = "latest";
         contents = [ 
-          pkgs.mariadb-server
+          pkgs.mariadb
         ];
         config = {
           ExposedPorts = {
@@ -27,14 +27,14 @@
           # Distroless non‑root user
           User = "1000";
 
-          Cmd = [ "${pkgs.mariadb-server}/bin/mariadb-server" ];
+          Cmd = [ "${pkgs.mariadb}/bin/mariadb" ];
         };
       };
     };
 
-    # Expose the mariadb-server version for CI workflows
-    mariadb-serverVersion = pkgs.mariadb-server.version;
+    # Expose the mariadb version for CI workflows
+    mariadbVersion = pkgs.mariadb.version;
 
-    defaultPackage.${system} = self.packages.${system}.mariadb-server-image;
+    defaultPackage.${system} = self.packages.${system}.mariadb-image;
   };
 }
