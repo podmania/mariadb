@@ -1,3 +1,3 @@
-# <% name %>
+# mariadb-server
 
-<% description %>
+Enhanced, drop-in replacement for MySQL.
