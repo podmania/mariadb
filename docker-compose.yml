@@ -1,0 +1,16 @@
+services:
+  <% name %>:
+    image: ghcr.io/podmania/<% name %>:latest
+    # set to host user id and gid
+    # defaults to 1000:1000
+    # user: 1001:1001
+    container_name: <% name %>
+    ports:
+      - 1234:1234
+    volumes:   
+      - ./config:/config
+      - ./data:/data
+      - /etc/localtime:/etc/localtime:ro # optional: use either TZ variable or localtime mapping, not both
+    # environment:
+    #   - TZ=America/New_York
+    restart: unless-stopped
