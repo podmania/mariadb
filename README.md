@@ -74,3 +74,5 @@ All `MARIADB_*` variables take precedence over their `MYSQL_*` equivalents. Most
 Every sensitive variable has a `_FILE` counterpart that reads the value from a file path:
 
 `MARIADB_ROOT_PASSWORD_FILE`, `MARIADB_ROOT_PASSWORD_HASH_FILE`, `MARIADB_ROOT_HOST_FILE`, `MARIADB_DATABASE_FILE`, `MARIADB_USER_FILE`, `MARIADB_PASSWORD_FILE`, `MARIADB_PASSWORD_HASH_FILE`, `MARIADB_REPLICATION_USER_FILE`, `MARIADB_REPLICATION_PASSWORD_FILE`, `MARIADB_REPLICATION_PASSWORD_HASH_FILE`, `MARIADB_MASTER_HOST_FILE`, `MARIADB_MASTER_PORT_FILE`
+
+<a href="https://www.buymeacoffee.com/bhoehn" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
