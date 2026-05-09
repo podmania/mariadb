@@ -25,7 +25,7 @@ jobs:
       should_build: ${{ steps.check.outputs.should_build }}
       force_rebuild: ${{ steps.check.outputs.force_rebuild }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
         with:
@@ -57,7 +57,7 @@ jobs:
     if: needs.check-version.outputs.force_rebuild == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Delete existing release and tag
         env:
           GH_TOKEN: ${{ github.token }}
@@ -95,7 +95,7 @@ jobs:
             arch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
         with:
@@ -185,7 +185,7 @@ jobs:
     needs: [check-version, publish]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
