@@ -160,26 +160,26 @@ jobs:
           path: arm64
       - name: Load arm64 image
         run: docker load < arm64/image.tar
-      - name: Push images and create manifest
+      - name: Push images and create manifests
         run: |
           VERSION="${{ needs.check-version.outputs.new_version }}"
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-arm64
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          AMD64="${IMAGE}:${VERSION}-amd64"
+          ARM64="${IMAGE}:${VERSION}-arm64"
 
-          docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION} \
-            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64 \
-            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-arm64
-          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
+          docker push "${AMD64}"
+          docker push "${ARM64}"
 
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-arm64 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
+          TAGS="${VERSION}"
+          IFS=. read -r MAJOR MINOR _ <<< "${VERSION}"
+          [ -n "${MAJOR}" ] && TAGS+=" ${MAJOR}"
+          [ -n "${MINOR}" ] && TAGS+=" ${MAJOR}.${MINOR}"
+          TAGS+=" latest"
 
-          docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
-            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64 \
-            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
-          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          for TAG in ${TAGS}; do
+            docker manifest create "${IMAGE}:${TAG}" --amend "${AMD64}" --amend "${ARM64}"
+            docker manifest push "${IMAGE}:${TAG}"
+          done
 
   release:
     needs: [check-version, publish]
