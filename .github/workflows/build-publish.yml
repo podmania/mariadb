@@ -133,7 +133,9 @@ jobs:
           VERSION="${{ needs.check-version.outputs.new_version }}"
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
 
-          docker run --rm "${IMAGE}:${VERSION}-amd64" --verbose
+          CMD_PATH=$(docker inspect "${IMAGE}:${VERSION}-amd64" --format='{{index .Config.Cmd 0}}')
+          docker run --rm "${IMAGE}:${VERSION}-amd64" "$CMD_PATH" --version
+
           docker run --rm "${IMAGE}:${VERSION}-debug-amd64" /bin/bash -c "echo debug-ok"
 
   publish:
