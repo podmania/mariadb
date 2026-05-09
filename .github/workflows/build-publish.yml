@@ -101,18 +101,22 @@ jobs:
         with:
           use-flakehub: false
 
-      - name: Build and load image
-        run: nix run .#mariadb-image.copyToDockerDaemon --impure
-      - name: Save image to file
+      - name: Build and load images
+        run: |
+          nix run .#mariadb-image.copyToDockerDaemon --impure
+          nix run .#mariadb-debug-image.copyToDockerDaemon --impure
+      - name: Save images to file
         run: |
           VERSION="${{ needs.check-version.outputs.new_version }}"
-          docker tag mariadb:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-${{ matrix.arch }}
-          docker save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-${{ matrix.arch }} > image.tar
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          docker tag mariadb:latest "${IMAGE}:${VERSION}-${{ matrix.arch }}"
+          docker tag mariadb:latest-debug "${IMAGE}:${VERSION}-debug-${{ matrix.arch }}"
+          docker save "${IMAGE}:${VERSION}-${{ matrix.arch }}" "${IMAGE}:${VERSION}-debug-${{ matrix.arch }}" > images.tar
       - name: Upload image artifact
         uses: actions/upload-artifact@v4
         with:
           name: image-${{ matrix.arch }}
-          path: image.tar
+          path: images.tar
           retention-days: 1
 
   test:
@@ -123,19 +127,23 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: image-amd64
-      - name: Load and test image
+      - name: Load and test images
         run: |
-          docker load < image.tar
+          docker load < images.tar
           VERSION="${{ needs.check-version.outputs.new_version }}"
-          docker run -d --name test-container ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+
+          docker run -d --name test-main "${IMAGE}:${VERSION}-amd64"
           sleep 5
-          STATUS=$(docker inspect -f '{{.State.Status}}' test-container)
+          STATUS=$(docker inspect -f '{{.State.Status}}' test-main)
           if [ "$STATUS" = "exited" ]; then
-            echo "::error::Container exited immediately"
-            docker logs test-container 2>&1 || true
+            echo "::error::Main container exited immediately"
+            docker logs test-main 2>&1 || true
             exit 1
           fi
-          echo "Container is $STATUS"
+          echo "Main container is $STATUS"
+
+          docker run --rm "${IMAGE}:${VERSION}-debug-amd64" /bin/bash -c "echo debug-ok"
 
   publish:
     needs: [check-version, test]
@@ -152,32 +160,41 @@ jobs:
         with:
           name: image-amd64
       - name: Load amd64 image
-        run: docker load < image.tar
+        run: docker load < images.tar
       - name: Download arm64 image
         uses: actions/download-artifact@v4
         with:
           name: image-arm64
           path: arm64
       - name: Load arm64 image
-        run: docker load < arm64/image.tar
+        run: docker load < arm64/images.tar
       - name: Push images and create manifests
         run: |
           VERSION="${{ needs.check-version.outputs.new_version }}"
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          AMD64="${IMAGE}:${VERSION}-amd64"
-          ARM64="${IMAGE}:${VERSION}-arm64"
 
-          docker push "${AMD64}"
-          docker push "${ARM64}"
-
+          # --- Main ---
+          docker push "${IMAGE}:${VERSION}-amd64"
+          docker push "${IMAGE}:${VERSION}-arm64"
           TAGS="${VERSION}"
           IFS=. read -r MAJOR MINOR _ <<< "${VERSION}"
           [ -n "${MAJOR}" ] && TAGS+=" ${MAJOR}"
           [ -n "${MINOR}" ] && TAGS+=" ${MAJOR}.${MINOR}"
           TAGS+=" latest"
-
           for TAG in ${TAGS}; do
-            docker manifest create "${IMAGE}:${TAG}" --amend "${AMD64}" --amend "${ARM64}"
+            docker manifest create "${IMAGE}:${TAG}" --amend "${IMAGE}:${VERSION}-amd64" --amend "${IMAGE}:${VERSION}-arm64"
+            docker manifest push "${IMAGE}:${TAG}"
+          done
+
+          # --- Debug ---
+          docker push "${IMAGE}:${VERSION}-debug-amd64"
+          docker push "${IMAGE}:${VERSION}-debug-arm64"
+          DEBUG_TAGS="${VERSION}-debug"
+          [ -n "${MAJOR}" ] && DEBUG_TAGS+=" ${MAJOR}-debug"
+          [ -n "${MINOR}" ] && DEBUG_TAGS+=" ${MAJOR}.${MINOR}-debug"
+          DEBUG_TAGS+=" latest-debug"
+          for TAG in ${DEBUG_TAGS}; do
+            docker manifest create "${IMAGE}:${TAG}" --amend "${IMAGE}:${VERSION}-debug-amd64" --amend "${IMAGE}:${VERSION}-debug-arm64"
             docker manifest push "${IMAGE}:${TAG}"
           done
 
