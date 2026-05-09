@@ -107,8 +107,32 @@ jobs:
             --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
           docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-  release:
+  test:
     needs: [check-version, create-manifest]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Pull and test image
+        run: |
+          VERSION="${{ needs.check-version.outputs.new_version }}"
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
+          docker run -d --name test-container ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
+          sleep 5
+          STATUS=$(docker inspect -f '{{.State.Status}}' test-container)
+          if [ "$STATUS" = "exited" ]; then
+            echo "::error::Container exited immediately"
+            docker logs test-container 2>&1 || true
+            exit 1
+          fi
+          echo "Container is $STATUS"
+
+  release:
+    needs: [check-version, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
