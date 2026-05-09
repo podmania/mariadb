@@ -25,7 +25,6 @@
           };
 
           # Distroless non‑root user
-          User = "1000";
 
           Cmd = [ "${pkgs.mariadb}/bin/mariadb" ];
         };
