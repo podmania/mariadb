@@ -18,7 +18,7 @@
       Volumes = {
         "/var/lib/mysql" = {};
       };
-      Cmd = [ "${pkgs.mariadb}/bin/mariadb" ];
+      Cmd = [ "${pkgs.mariadb}/bin/mariadbd" "--datadir=/var/lib/mysql" ];
     };
   in {
     packages.${system} = {

@@ -133,16 +133,7 @@ jobs:
           VERSION="${{ needs.check-version.outputs.new_version }}"
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
 
-          docker run -d --name test-main "${IMAGE}:${VERSION}-amd64"
-          sleep 5
-          STATUS=$(docker inspect -f '{{.State.Status}}' test-main)
-          if [ "$STATUS" = "exited" ]; then
-            echo "::error::Main container exited immediately"
-            docker logs test-main 2>&1 || true
-            exit 1
-          fi
-          echo "Main container is $STATUS"
-
+          docker run --rm "${IMAGE}:${VERSION}-amd64" --verbose
           docker run --rm "${IMAGE}:${VERSION}-debug-amd64" /bin/bash -c "echo debug-ok"
 
   publish:
