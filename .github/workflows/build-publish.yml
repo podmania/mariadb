@@ -23,8 +23,9 @@ jobs:
     outputs:
       new_version: ${{ steps.version.outputs.new_version }}
       should_build: ${{ steps.check.outputs.should_build }}
+      force_rebuild: ${{ steps.check.outputs.force_rebuild }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
         with:
@@ -39,6 +40,7 @@ jobs:
         id: check
         run: |
           FORCE=${{ github.event.inputs.force_rebuild == 'true' }}
+          echo "force_rebuild=$FORCE" >> $GITHUB_OUTPUT
           if [ "$FORCE" = "true" ]; then
             echo "should_build=true" >> $GITHUB_OUTPUT
             exit 0
@@ -50,8 +52,39 @@ jobs:
             echo "should_build=true" >> $GITHUB_OUTPUT
           fi
 
-  build:
+  cleanup:
     needs: check-version
+    if: needs.check-version.outputs.force_rebuild == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete existing release and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ needs.check-version.outputs.new_version }}"
+          if gh release view "${VERSION}" --repo ${{ github.repository }} > /dev/null 2>&1; then
+            echo "Deleting release ${VERSION}"
+            gh release delete "${VERSION}" --repo ${{ github.repository }} --yes --cleanup-tag
+          fi
+      - name: Delete existing package version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ needs.check-version.outputs.new_version }}"
+          PACKAGE_NAME="${{ github.repository }}"
+          PACKAGE_NAME="${PACKAGE_NAME,,}"
+          PACKAGE_ID=$(gh api "/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_NAME#*/}" --jq '.id' 2>/dev/null || echo "")
+          if [ -n "$PACKAGE_ID" ]; then
+            VERSION_ID=$(gh api "/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_NAME#*/}/versions" --jq ".[] | select(.metadata.container.tags | index(\"${VERSION}\")) | .id" 2>/dev/null || echo "")
+            if [ -n "$VERSION_ID" ]; then
+              echo "Deleting package version ${VERSION_ID} for tag ${VERSION}"
+              gh api --method DELETE "/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_NAME#*/}/versions/${VERSION_ID}" 2>/dev/null || echo "Could not delete package version (may need manual cleanup)"
+            fi
+          fi
+
+  build:
+    needs: [check-version, cleanup]
     if: needs.check-version.outputs.should_build == 'true'
     strategy:
       matrix:
@@ -62,66 +95,39 @@ jobs:
             arch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
         with:
           use-flakehub: false
 
-      - name: Login to GHCR
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
       - name: Build and load image
         run: nix run .#mariadb-image.copyToDockerDaemon --impure
-      - name: Tag and push
+      - name: Save image to file
         run: |
           VERSION="${{ needs.check-version.outputs.new_version }}"
           docker tag mariadb:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-${{ matrix.arch }}
-          docker tag mariadb:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ matrix.arch }}
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-${{ matrix.arch }}
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ matrix.arch }}
+          docker save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-${{ matrix.arch }} > image.tar
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.arch }}
+          path: image.tar
+          retention-days: 1
 
-  create-manifest:
+  test:
     needs: [check-version, build]
     runs-on: ubuntu-latest
     steps:
-      - name: Login to GHCR
-        uses: docker/login-action@v4
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-      - name: Create multi-arch manifest
+          name: image-amd64
+      - name: Load and test image
         run: |
+          docker load < image.tar
           VERSION="${{ needs.check-version.outputs.new_version }}"
-          docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION} \
-            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64 \
-            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-arm64
-          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
-
-          docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
-            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64 \
-            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
-          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-
-  test:
-    needs: [check-version, create-manifest]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Login to GHCR
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-      - name: Pull and test image
-        run: |
-          VERSION="${{ needs.check-version.outputs.new_version }}"
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
-          docker run -d --name test-container ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
+          docker run -d --name test-container ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64
           sleep 5
           STATUS=$(docker inspect -f '{{.State.Status}}' test-container)
           if [ "$STATUS" = "exited" ]; then
@@ -131,16 +137,64 @@ jobs:
           fi
           echo "Container is $STATUS"
 
-  release:
+  publish:
     needs: [check-version, test]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Download amd64 image
+        uses: actions/download-artifact@v4
+        with:
+          name: image-amd64
+      - name: Load amd64 image
+        run: docker load < image.tar
+      - name: Download arm64 image
+        uses: actions/download-artifact@v4
+        with:
+          name: image-arm64
+          path: arm64
+      - name: Load arm64 image
+        run: docker load < arm64/image.tar
+      - name: Push images and create manifest
+        run: |
+          VERSION="${{ needs.check-version.outputs.new_version }}"
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-arm64
+
+          docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION} \
+            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64 \
+            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-arm64
+          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
+
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-arm64 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
+
+          docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64 \
+            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
+          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+  release:
+    needs: [check-version, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ needs.check-version.outputs.new_version }}"
+          if gh release view "${VERSION}" --repo ${{ github.repository }} > /dev/null 2>&1; then
+            echo "Release ${VERSION} already exists, skipping"
+            exit 0
+          fi
           gh release create "${VERSION}" \
             --repo ${{ github.repository }} \
             --title "${VERSION}" \
