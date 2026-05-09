@@ -1,0 +1,13 @@
+services:
+  mariadb:
+    image: ghcr.io/podmania/mariadb:latest
+    userns_mode: "keep-id"
+    container_name: mariadb
+    ports:
+      - 3306:3306
+    volumes:
+      - db:/var/lib/mysql
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+volumes:
+  db:
