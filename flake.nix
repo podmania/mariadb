@@ -17,7 +17,6 @@
         name = "mariadb";
         tag = "latest";
         fromImage = base.packages.${system}.base-image;
-        copyToRoot = [ pkgs.mariadb ];
         config = {
           ExposedPorts = {
             "3306/tcp" = {};
