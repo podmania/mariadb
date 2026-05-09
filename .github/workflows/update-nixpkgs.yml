@@ -1,0 +1,48 @@
+name: Update nixpkgs
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update nixpkgs in flake.lock
+        run: nix flake update
+
+      - name: Commit and push if changed
+        id: commit
+        run: |
+          if git diff --quiet flake.lock; then
+            echo "No changes to flake.lock"
+            echo "changed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          git add flake.lock
+          git commit -m "chore: update flake.lock"
+          git push origin main
+          echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Trigger build-publish workflow
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          gh workflow run build-publish.yml --ref main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
