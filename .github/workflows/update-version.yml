@@ -6,61 +6,12 @@ on:
 
 jobs:
   update:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: write
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: DeterminateSystems/nix-installer-action@main
-
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Check for new release
-        id: check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          LATEST_TAG=$(gh api repos/MariaDB/server/tags --per-page 100 --jq '[.[] | select(.name | startswith("mariadb-")) | .name] | first')
-          LATEST="${LATEST_TAG#mariadb-}"
-          CURRENT=$(grep 'version = "' flake.nix | head -1 | grep -o '"[^"]*"' | tr -d '"')
-          echo "latest=${LATEST}" >> $GITHUB_OUTPUT
-          echo "current=${CURRENT}" >> $GITHUB_OUTPUT
-          if [ "$LATEST" != "$CURRENT" ]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "::notice::mariadb ${CURRENT} → ${LATEST}"
-          fi
-
-      - name: Update version and hash
-        if: steps.check.outputs.changed == 'true'
-        run: |
-          VERSION="${{ steps.check.outputs.latest }}"
-          HASH=$(nix-prefetch-url "https://archive.mariadb.org/mariadb-${VERSION}/source/mariadb-${VERSION}.tar.gz" 2>/dev/null)
-          if [[ "$HASH" != sha256-* ]]; then
-            HASH="sha256-$(nix hash convert --hash-algo sha256 --to base64 "$HASH" 2>/dev/null || echo "$HASH")"
-          fi
-          sed -i "s/version = \".*\"/version = \"${VERSION}\"/" flake.nix
-          sed -i "s|srcHash = \".*\"|srcHash = \"${HASH}\"|" flake.nix
-
-      - name: Commit and push
-        if: steps.check.outputs.changed == 'true'
-        run: |
-          OLD="${{ steps.check.outputs.current }}"
-          NEW="${{ steps.check.outputs.latest }}"
-          git add flake.nix
-          git commit -m "chore: mariadb ${OLD} → ${NEW}"
-          git push origin main
-
-      - name: Trigger build-publish workflow
-        if: steps.check.outputs.changed == 'true'
-        run: |
-          gh workflow run build-publish.yml --ref main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    uses: podmania/.github/.github/workflows/update-version.yml@main
+    with:
+      package: mariadb
+      upstream: MariaDB/server
+      tag-prefix: mariadb-
+      fetcher: fetchurl
+      fetch-url: 'https://archive.mariadb.org/mariadb-${VERSION}/source/mariadb-${VERSION}.tar.gz'
+      unpack: false
+      use-tags-api: true
