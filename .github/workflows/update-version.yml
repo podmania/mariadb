@@ -6,7 +6,7 @@ on:
 
 jobs:
   update:
-    uses: podmania/.github/.github/workflows/update-version.yml@main
+    uses: podmania/actions/.github/workflows/update-version.yml@main
     with:
       package: mariadb
       upstream: MariaDB/server

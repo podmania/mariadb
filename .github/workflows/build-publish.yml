@@ -15,7 +15,7 @@ on:
 
 jobs:
   build:
-    uses: podmania/.github/.github/workflows/build-publish.yml@main
+    uses: podmania/actions/.github/workflows/build-publish.yml@main
     with:
       package: mariadb
       version-output: mariadbVersion
