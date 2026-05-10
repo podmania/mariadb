@@ -23,51 +23,43 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Record current version
-        id: before
+      - name: Check for new release
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION=$(nix eval .#mariadbVersion --raw --impure)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Update flake.lock
-        run: nix flake update
-
-      - name: Check for version change
-        id: after
-        run: |
-          NEW_VERSION=$(nix eval .#mariadbVersion --raw --impure)
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          if [ "${{ steps.before.outputs.version }}" = "$NEW_VERSION" ]; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
+          LATEST_TAG=$(gh api repos/MariaDB/server/tags --per-page 100 --jq '[.[] | select(.name | startswith("mariadb-")) | .name] | first')
+          LATEST="${LATEST_TAG#mariadb-}"
+          CURRENT=$(grep 'version = "' flake.nix | head -1 | grep -o '"[^"]*"' | tr -d '"')
+          echo "latest=${LATEST}" >> $GITHUB_OUTPUT
+          echo "current=${CURRENT}" >> $GITHUB_OUTPUT
+          if [ "$LATEST" != "$CURRENT" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "::notice::mariadb ${{ steps.before.outputs.version }} → $NEW_VERSION"
+            echo "::notice::mariadb ${CURRENT} → ${LATEST}"
           fi
 
-      - name: Commit and push if changed
-        id: commit
+      - name: Update version and hash
+        if: steps.check.outputs.changed == 'true'
         run: |
-          if git diff --quiet flake.lock; then
-            echo "No changes to flake.lock"
-            echo "changed=false" >> $GITHUB_OUTPUT
-            exit 0
+          VERSION="${{ steps.check.outputs.latest }}"
+          HASH=$(nix-prefetch-url "https://archive.mariadb.org/mariadb-${VERSION}/source/mariadb-${VERSION}.tar.gz" 2>/dev/null)
+          if [[ "$HASH" != sha256-* ]]; then
+            HASH="sha256-$(nix hash convert --hash-algo sha256 --to base64 "$HASH" 2>/dev/null || echo "$HASH")"
           fi
+          sed -i "s/version = \".*\"/version = \"${VERSION}\"/" flake.nix
+          sed -i "s|srcHash = \".*\"|srcHash = \"${HASH}\"|" flake.nix
 
-          OLD="${{ steps.before.outputs.version }}"
-          NEW="${{ steps.after.outputs.version }}"
-          if [ "$OLD" = "$NEW" ]; then
-            MSG="chore: update flake.lock"
-          else
-            MSG="chore: mariadb ${OLD} → ${NEW}"
-          fi
-
-          git add flake.lock
-          git commit -m "$MSG"
+      - name: Commit and push
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          OLD="${{ steps.check.outputs.current }}"
+          NEW="${{ steps.check.outputs.latest }}"
+          git add flake.nix
+          git commit -m "chore: mariadb ${OLD} → ${NEW}"
           git push origin main
-          echo "changed=true" >> $GITHUB_OUTPUT
 
       - name: Trigger build-publish workflow
-        if: steps.commit.outputs.changed == 'true'
+        if: steps.check.outputs.changed == 'true'
         run: |
           gh workflow run build-publish.yml --ref main
         env:

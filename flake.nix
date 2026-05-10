@@ -11,6 +11,15 @@
     system = builtins.currentSystem;
     pkgs = nixpkgs.legacyPackages.${system};
     n2c = nix2container.outputs.packages.${system}.nix2container;
+    version = "11.4.9";
+    srcHash = "sha256-jkgcoptadARE1FRRyOotk3Ec9SXW+l0nvJUSz4lzsHU=";
+    pkg = pkgs.mariadb.overrideAttrs (old: {
+      inherit version;
+      src = pkgs.fetchurl {
+        urls = [ "https://archive.mariadb.org/mariadb-${version}/source/mariadb-${version}.tar.gz" ];
+        hash = srcHash;
+      };
+    });
     imageConfig = {
       ExposedPorts = {
         "3306/tcp" = {};
@@ -18,7 +27,7 @@
       Volumes = {
         "/var/lib/mysql" = {};
       };
-      Cmd = [ "${pkgs.mariadb}/bin/mariadbd" "--datadir=/var/lib/mysql" ];
+      Cmd = [ "${pkg}/bin/mariadbd" "--datadir=/var/lib/mysql" ];
     };
   in {
     packages.${system} = {
@@ -36,11 +45,11 @@
         config = imageConfig;
       };
 
-      mariadb = pkgs.mariadb;
+      mariadb = pkg;
 
       default = self.packages.${system}.mariadb-image;
     };
 
-    mariadbVersion = pkgs.mariadb.version;
+    mariadbVersion = version;
   };
 }
