@@ -20,14 +20,31 @@
         hash = srcHash;
       };
     });
+
+    # Pre-create /var/lib/mysql with world-writable permissions so any
+    # running user can write to it and take ownership at startup.
+    dataDir = pkgs.runCommand "mariadb-data" {} ''
+      mkdir -p $out/var/lib/mysql
+    '';
+
+    # Simple entrypoint: take ownership of the data directory, then exec mariadbd.
+    # Works whether the container runs via userns_mode or user: PUID:PGID.
+    entrypoint = pkgs.writeScriptBin "entrypoint" ''
+      #!${pkgs.bashInteractive}/bin/bash
+      set -e
+      mkdir -p /var/lib/mysql
+      chown "$(id -u):$(id -g)" /var/lib/mysql
+      exec ${pkg}/bin/mariadbd --user="$(id -un)" --datadir=/var/lib/mysql "$@"
+    '';
+
     imageConfig = {
+      Entrypoint = [ "${entrypoint}/bin/entrypoint" ];
       ExposedPorts = {
         "3306/tcp" = {};
       };
       Volumes = {
         "/var/lib/mysql" = {};
       };
-      Cmd = [ "${pkg}/bin/mariadbd" "--datadir=/var/lib/mysql" ];
     };
   in {
     packages.${system} = {
@@ -35,6 +52,10 @@
         name = "mariadb";
         tag = "latest";
         fromImage = base.packages.${system}.base-image;
+        copyToRoot = [ dataDir ];
+        perms = [
+          { path = dataDir; regex = "var/lib/mysql"; mode = "0777"; }
+        ];
         maxLayers = 5;
         config = imageConfig;
       };
@@ -43,6 +64,10 @@
         name = "mariadb";
         tag = "latest-debug";
         fromImage = base.packages.${system}.base-debug-image;
+        copyToRoot = [ dataDir ];
+        perms = [
+          { path = dataDir; regex = "var/lib/mysql"; mode = "0777"; }
+        ];
         maxLayers = 5;
         config = imageConfig;
       };
