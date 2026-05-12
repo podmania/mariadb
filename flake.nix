@@ -32,10 +32,9 @@
     entrypoint = pkgs.writeScriptBin "entrypoint" ''
       #!${pkgs.bashInteractive}/bin/bash
       set -e
-      mkdir -p /var/lib/mysql
       chown "$(id -u):$(id -g)" /var/lib/mysql
       chmod 0700 /var/lib/mysql
-      exec ${pkg}/bin/mariadbd --user="$(id -un)" --datadir=/var/lib/mysql "$@"
+      exec ${pkg}/bin/mariadbd --user="$(id -u)" --datadir=/var/lib/mysql "$@"
     '';
 
     imageConfig = {
@@ -53,7 +52,7 @@
         name = "mariadb";
         tag = "latest";
         fromImage = base.packages.${system}.base-image;
-        copyToRoot = [ dataDir ];
+        copyToRoot = [ dataDir pkgs.coreutils ];
         perms = [
           { path = dataDir; regex = "var/lib/mysql"; mode = "0777"; }
         ];
@@ -65,7 +64,7 @@
         name = "mariadb";
         tag = "latest-debug";
         fromImage = base.packages.${system}.base-debug-image;
-        copyToRoot = [ dataDir ];
+        copyToRoot = [ dataDir pkgs.coreutils ];
         perms = [
           { path = dataDir; regex = "var/lib/mysql"; mode = "0777"; }
         ];
