@@ -8,7 +8,6 @@ jobs:
   update:
     uses: podmania/actions/.github/workflows/update-version.yml@main
     with:
-      package: mariadb
       upstream: MariaDB/server
       tag-prefix: mariadb-
       fetcher: fetchurl

@@ -8,6 +8,6 @@ services:
     volumes:
       - db:/var/lib/mysql
       - /etc/localtime:/etc/localtime:ro
-    restart: unless-stopped
+    restart: always
 volumes:
   db:

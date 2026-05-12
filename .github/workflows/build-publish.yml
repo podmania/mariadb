@@ -17,7 +17,6 @@ jobs:
   build:
     uses: podmania/actions/.github/workflows/build-publish.yml@main
     with:
-      package: mariadb
       version-output: mariadbVersion
       images: '[{"name":"mariadb","package":"mariadb-image"}]'
       force_rebuild: ${{ github.event.inputs.force_rebuild == 'true' }}
