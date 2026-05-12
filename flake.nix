@@ -27,12 +27,13 @@
       mkdir -p $out/var/lib/mysql
     '';
 
-    # Simple entrypoint: take ownership of the data directory, then exec mariadbd.
-    # Works whether the container runs via userns_mode or user: PUID:PGID.
+    # Simple entrypoint: restrict data dir permissions, then exec mariadbd.
+    # The data dir is world-writable in the image (via perms), so the running
+    # user can write to it. chmod locks it down before mariadbd starts.
+    # chown is skipped — it requires CAP_CHOWN which unprivileged users lack.
     entrypoint = pkgs.writeScriptBin "entrypoint" ''
       #!${pkgs.bashInteractive}/bin/bash
       set -e
-      chown "$(id -u):$(id -g)" /var/lib/mysql
       chmod 0700 /var/lib/mysql
       exec ${pkg}/bin/mariadbd --user="$(id -u)" --datadir=/var/lib/mysql "$@"
     '';
