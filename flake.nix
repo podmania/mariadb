@@ -34,6 +34,7 @@
       set -e
       mkdir -p /var/lib/mysql
       chown "$(id -u):$(id -g)" /var/lib/mysql
+      chmod 0700 /var/lib/mysql
       exec ${pkg}/bin/mariadbd --user="$(id -un)" --datadir=/var/lib/mysql "$@"
     '';
 
