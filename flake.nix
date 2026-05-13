@@ -21,20 +21,19 @@
       };
     });
 
-    # Pre-create /var/lib/mysql with world-writable permissions so any
-    # running user can write to it and take ownership at startup.
+    # Pre-create /var/lib/mysql. The perms directive below sets mode 0700
+    # directly in the image layer — no runtime chmod needed (unprivileged
+    # users cannot chmod directories they don't own).
     dataDir = pkgs.runCommand "mariadb-data" {} ''
       mkdir -p $out/var/lib/mysql
     '';
 
-    # Simple entrypoint: restrict data dir permissions, then exec mariadbd.
-    # The data dir is world-writable in the image (via perms), so the running
-    # user can write to it. chmod locks it down before mariadbd starts.
-    # chown is skipped — it requires CAP_CHOWN which unprivileged users lack.
+    # Simple entrypoint: exec mariadbd.
+    # No chmod/chown — unprivileged users lack CAP_CHOWN and cannot chmod
+    # directories they don't own. Permissions are set at build time via perms.
     entrypoint = pkgs.writeScriptBin "entrypoint" ''
       #!${pkgs.bashInteractive}/bin/bash
       set -e
-      chmod 0700 /var/lib/mysql
       exec ${pkg}/bin/mariadbd --user="$(id -u)" --datadir=/var/lib/mysql "$@"
     '';
 
@@ -55,7 +54,7 @@
         fromImage = base.packages.${system}.base-image;
         copyToRoot = [ dataDir pkgs.coreutils ];
         perms = [
-          { path = dataDir; regex = "var/lib/mysql"; mode = "0777"; }
+          { path = dataDir; regex = "var/lib/mysql"; mode = "0700"; }
         ];
         maxLayers = 5;
         config = imageConfig;
@@ -67,7 +66,7 @@
         fromImage = base.packages.${system}.base-debug-image;
         copyToRoot = [ dataDir pkgs.coreutils ];
         perms = [
-          { path = dataDir; regex = "var/lib/mysql"; mode = "0777"; }
+          { path = dataDir; regex = "var/lib/mysql"; mode = "0700"; }
         ];
         maxLayers = 5;
         config = imageConfig;
