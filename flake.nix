@@ -19,7 +19,7 @@
         urls = [ "https://archive.mariadb.org/mariadb-${version}/source/mariadb-${version}.tar.gz" ];
         hash = srcHash;
       };
-    });
+    };
 
     imageConfig = {
       Entrypoint = [ "${pkg}/bin/mariadbd" ];
@@ -37,10 +37,6 @@
         name = "mariadb";
         tag = "latest";
         fromImage = base.packages.${system}.base-image;
-        copyToRoot = [ dataDir ];
-        perms = [
-          { path = dataDir; regex = "var/lib/mysql"; mode = "0777"; }
-        ];
         maxLayers = 5;
         config = imageConfig;
       };
@@ -49,10 +45,6 @@
         name = "mariadb";
         tag = "latest-debug";
         fromImage = base.packages.${system}.base-debug-image;
-        copyToRoot = [ dataDir ];
-        perms = [
-          { path = dataDir; regex = "var/lib/mysql"; mode = "0777"; }
-        ];
         maxLayers = 5;
         config = imageConfig;
       };
