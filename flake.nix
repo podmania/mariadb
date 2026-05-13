@@ -13,6 +13,7 @@
     n2c = nix2container.outputs.packages.${system}.nix2container;
     dataDir = pkgs.runCommand "data-dir" {} ''
       mkdir -p $out/var/lib/mysql
+      mkdir -p $out/run/mysqld
     '';
     version = "11.4.9";
     srcHash = "sha256-jkgcoptadARE1FRRyOotk3Ec9SXW+l0nvJUSz4lzsHU=";
@@ -43,6 +44,7 @@
         copyToRoot = [ dataDir ];
         perms = [
           { path = dataDir; regex = "/var/lib/mysql"; mode = "0777"; }
+          { path = dataDir; regex = "/run/mysqld"; mode = "0777"; }
         ];
         maxLayers = 5;
         config = imageConfig;
@@ -55,6 +57,7 @@
         copyToRoot = [ dataDir ];
         perms = [
           { path = dataDir; regex = "/var/lib/mysql"; mode = "0777"; }
+          { path = dataDir; regex = "/run/mysqld"; mode = "0777"; }
         ];
         maxLayers = 5;
         config = imageConfig;
