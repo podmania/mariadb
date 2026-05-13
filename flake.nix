@@ -19,7 +19,7 @@
         urls = [ "https://archive.mariadb.org/mariadb-${version}/source/mariadb-${version}.tar.gz" ];
         hash = srcHash;
       };
-    };
+    });
 
     imageConfig = {
       Entrypoint = [ "${pkg}/bin/mariadbd" ];
