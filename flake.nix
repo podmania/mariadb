@@ -14,6 +14,7 @@
     dataDir = pkgs.runCommand "data-dir" {} ''
       mkdir -p $out/var/lib/mysql
       mkdir -p $out/run/mysqld
+      mkdir -p $out/config
     '';
     version = "11.4.9";
     srcHash = "sha256-jkgcoptadARE1FRRyOotk3Ec9SXW+l0nvJUSz4lzsHU=";
@@ -25,14 +26,23 @@
       };
     });
 
+    execline = pkgs.execline;
     imageConfig = {
-      Entrypoint = [ "${pkg}/bin/mariadbd" ];
-      Cmd = [ "--datadir=/var/lib/mysql" ];
+      Entrypoint = [
+        "${execline}/bin/execlineb" "-c"
+        "ifthenelse { ${execline}/bin/eltest -d /var/lib/mysql/mysql } { } { ${pkg}/bin/mariadbd --initialize --skip-ssl --datadir=/var/lib/mysql } ${pkg}/bin/mariadbd --skip-name-resolve --bind-address=0.0.0.0 --defaults-extra-file=/config/custom.cnf --datadir=/var/lib/mysql"
+      ];
       ExposedPorts = {
         "3306/tcp" = {};
       };
       Volumes = {
         "/var/lib/mysql" = {};
+      };
+      Healthcheck = {
+        Test = ["CMD" "${pkg}/bin/mariadb-admin" "ping" "-h" "127.0.0.1"];
+        Interval = 30000000000;
+        Timeout = 10000000000;
+        Retries = 3;
       };
     };
   in {
@@ -44,7 +54,8 @@
         copyToRoot = [ dataDir ];
         perms = [
           { path = dataDir; regex = "/var/lib/mysql"; mode = "0777"; }
-          { path = dataDir; regex = "/run/mysqld"; mode = "0777"; }
+          { path = dataDir; regex = "/run/mysqld"; mode = "1777"; }
+          { path = dataDir; regex = "/config"; mode = "0777"; }
         ];
         maxLayers = 5;
         config = imageConfig;
@@ -57,7 +68,8 @@
         copyToRoot = [ dataDir ];
         perms = [
           { path = dataDir; regex = "/var/lib/mysql"; mode = "0777"; }
-          { path = dataDir; regex = "/run/mysqld"; mode = "0777"; }
+          { path = dataDir; regex = "/run/mysqld"; mode = "1777"; }
+          { path = dataDir; regex = "/config"; mode = "0777"; }
         ];
         maxLayers = 5;
         config = imageConfig;
