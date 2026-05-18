@@ -27,10 +27,15 @@
     });
 
     execline = pkgs.execline;
+    initPath = pkgs.lib.makeBinPath [
+      pkgs.coreutils
+      pkgs.gnused
+      pkg
+    ];
     imageConfig = {
       Entrypoint = [
         "${execline}/bin/execlineb" "-c"
-        "ifthenelse { ${execline}/bin/eltest -d /var/lib/mysql/mysql } { } { ${pkg}/bin/mariadb-install-db --datadir=/var/lib/mysql --skip-test-db } ${pkg}/bin/mariadbd --skip-name-resolve --bind-address=0.0.0.0 --socket=/var/lib/mysql/mysqld.sock"
+        "export PATH ${initPath} ifthenelse { ${execline}/bin/eltest -d /var/lib/mysql/mysql } { } { ${pkg}/bin/mariadb-install-db --basedir=${pkg} --datadir=/var/lib/mysql --skip-test-db } ${pkg}/bin/mariadbd --skip-name-resolve --bind-address=0.0.0.0 --socket=/var/lib/mysql/mysqld.sock"
       ];
       ExposedPorts = {
         "3306/tcp" = {};
