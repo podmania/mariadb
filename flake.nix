@@ -28,6 +28,11 @@
 
     execline = pkgs.execline;
     initPath = pkgs.lib.makeBinPath [
+      pkgs.coreutils
+      pkgs.findutils
+      pkgs.gawk
+      pkgs.gnugrep
+      pkgs.inetutils
       pkgs.gnused
       pkg
     ];
