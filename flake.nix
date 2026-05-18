@@ -28,7 +28,6 @@
 
     execline = pkgs.execline;
     initPath = pkgs.lib.makeBinPath [
-      pkgs.coreutils
       pkgs.gnused
       pkg
     ];
