@@ -30,7 +30,7 @@
     imageConfig = {
       Entrypoint = [
         "${execline}/bin/execlineb" "-c"
-        "ifthenelse { ${execline}/bin/eltest -d /var/lib/mysql/mysql } { } { ${pkg}/bin/mariadbd --initialize --skip-ssl --datadir=/var/lib/mysql } ${pkg}/bin/mariadbd --skip-name-resolve --bind-address=0.0.0.0 --defaults-extra-file=/config/custom.cnf --datadir=/var/lib/mysql"
+        "ifthenelse { ${execline}/bin/eltest -d /var/lib/mysql/mysql } { } { ${pkg}/bin/mariadb-install-db --datadir=/var/lib/mysql --skip-test-db } ${pkg}/bin/mariadbd --skip-name-resolve --bind-address=0.0.0.0 --socket=/var/lib/mysql/mysqld.sock"
       ];
       ExposedPorts = {
         "3306/tcp" = {};
