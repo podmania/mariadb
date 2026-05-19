@@ -26,15 +26,62 @@
       };
     });
 
-    execline = pkgs.execline;
-    initPath = pkgs.lib.makeBinPath [
-      pkgs.gnused
-      pkg
-    ];
+    initScript = pkgs.writeShellScriptBin "mariadb-entrypoint" ''
+      set -e
+      DATADIR="/var/lib/mysql"
+      SOCKET="/var/lib/mysql/mysqld.sock"
+
+      if [ ! -d "$DATADIR/mysql" ]; then
+        echo "Initializing MariaDB data directory..."
+        ${pkg}/bin/mariadb-install-db --basedir=${pkg} --datadir="$DATADIR" --skip-test-db
+
+        echo "Starting temporary MariaDB server for initialization..."
+        ${pkg}/bin/mariadbd --datadir="$DATADIR" --skip-networking --socket="$SOCKET" --skip-grant-tables &
+        TEMP_PID=$!
+
+        echo "Waiting for temporary server to be ready..."
+        if ! ${pkg}/bin/mariadb-admin --socket="$SOCKET" --wait=30 ping; then
+          echo "ERROR: Temporary MariaDB server failed to start"
+          kill $TEMP_PID 2>/dev/null || true
+          exit 1
+        fi
+
+        if [ -n "$MARIADB_ROOT_PASSWORD" ]; then
+          echo "Setting root password..."
+          ${pkg}/bin/mariadb --socket="$SOCKET" --database=mysql \
+            -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$MARIADB_ROOT_PASSWORD';"
+        fi
+
+        if [ -n "$MARIADB_DATABASE" ]; then
+          echo "Creating database: $MARIADB_DATABASE"
+          ${pkg}/bin/mariadb --socket="$SOCKET" \
+            -e "CREATE DATABASE IF NOT EXISTS \`$MARIADB_DATABASE\`;"
+        fi
+
+        if [ -n "$MARIADB_USER" ] && [ -n "$MARIADB_PASSWORD" ]; then
+          echo "Creating user: $MARIADB_USER"
+          ${pkg}/bin/mariadb --socket="$SOCKET" \
+            -e "CREATE USER IF NOT EXISTS '$MARIADB_USER'@'%' IDENTIFIED BY '$MARIADB_PASSWORD';"
+          if [ -n "$MARIADB_DATABASE" ]; then
+            echo "Granting privileges on $MARIADB_DATABASE to $MARIADB_USER"
+            ${pkg}/bin/mariadb --socket="$SOCKET" \
+              -e "GRANT ALL PRIVILEGES ON \`$MARIADB_DATABASE\`.* TO '$MARIADB_USER'@'%';"
+          fi
+        fi
+
+        echo "Stopping temporary server..."
+        ${pkg}/bin/mariadb-admin --socket="$SOCKET" shutdown
+        wait $TEMP_PID
+        echo "MariaDB initialization complete."
+      fi
+
+      echo "Starting MariaDB server..."
+      exec ${pkg}/bin/mariadbd --datadir="$DATADIR" --skip-name-resolve --bind-address=0.0.0.0 --socket="$SOCKET"
+    '';
+
     imageConfig = {
       Entrypoint = [
-        "${execline}/bin/execlineb" "-c"
-        "export PATH ${initPath} ifthenelse { ${execline}/bin/eltest -d /var/lib/mysql/mysql } { } { ${pkg}/bin/mariadb-install-db --basedir=${pkg} --datadir=/var/lib/mysql --skip-test-db } ${pkg}/bin/mariadbd --skip-name-resolve --bind-address=0.0.0.0 --socket=/var/lib/mysql/mysqld.sock"
+        "${initScript}/bin/mariadb-entrypoint"
       ];
       ExposedPorts = {
         "3306/tcp" = {};
@@ -55,7 +102,7 @@
         name = "mariadb";
         tag = "latest";
         fromImage = base.packages.${system}.base-image;
-        copyToRoot = [ dataDir ];
+        copyToRoot = [ dataDir initScript ];
         perms = [
           { path = dataDir; regex = "/var/lib/mysql"; mode = "0777"; }
           { path = dataDir; regex = "/run/mysqld"; mode = "1777"; }
@@ -69,7 +116,7 @@
         name = "mariadb";
         tag = "latest-debug";
         fromImage = base.packages.${system}.base-debug-image;
-        copyToRoot = [ dataDir ];
+        copyToRoot = [ dataDir initScript ];
         perms = [
           { path = dataDir; regex = "/var/lib/mysql"; mode = "0777"; }
           { path = dataDir; regex = "/run/mysqld"; mode = "1777"; }
@@ -80,6 +127,7 @@
       };
 
       mariadb = pkg;
+      mariadb-entrypoint = initScript;
 
       default = self.packages.${system}.mariadb-image;
     };
